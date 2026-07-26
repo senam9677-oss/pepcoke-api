@@ -1,26 +1,28 @@
 const express = require("express");
-const auth = require("../middleware/auth");
-const Withdrawal = require("../models/Withdrawal");
-
 const router = express.Router();
 
-// Create Withdrawal
-router.post("/", auth, async (req, res) => {
+const Withdrawal = require("../models/Withdrawal");
+
+// Create a withdrawal request
+router.post("/", async (req, res) => {
   try {
     const {
+      user,
       amount,
       paymentMethod,
       accountNumber,
       accountName,
     } = req.body;
 
-    const withdrawal = await Withdrawal.create({
-      user: req.user.id,
+    const withdrawal = new Withdrawal({
+      user,
       amount,
       paymentMethod,
       accountNumber,
       accountName,
     });
+
+    await withdrawal.save();
 
     res.status(201).json({
       success: true,
@@ -35,14 +37,10 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-// Get User Withdrawals
-router.get("/", auth, async (req, res) => {
+// Get all withdrawal requests
+router.get("/", async (req, res) => {
   try {
-    const withdrawals = await Withdrawal.find({
-      user: req.user.id,
-    }).sort({
-      createdAt: -1,
-    });
+    const withdrawals = await Withdrawal.find().populate("user");
 
     res.json({
       success: true,

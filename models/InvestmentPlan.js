@@ -1,51 +1,30 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema(
+const investmentPlanSchema = new mongoose.Schema(
   {
-    fullName: {
+    name: {
       type: String,
       required: true,
     },
 
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-
-    phone: {
-      type: String,
-      required: true,
-    },
-
-    password: {
-      type: String,
-      required: true,
-    },
-
-    balance: {
+    amount: {
       type: Number,
-      default: 0,
+      required: true,
     },
 
-    totalEarnings: {
+    duration: {
+      type: String,
+      required: true,
+    },
+
+    percentage: {
       type: Number,
-      default: 0,
+      required: true,
     },
 
-    referralCode: {
-      type: String,
-      default: "",
-    },
-
-    referredBy: {
-      type: String,
-      default: "",
-    },
-
-    isAdmin: {
-      type: Boolean,
-      default: false,
+    totalReturn: {
+      type: Number,
+      required: true,
     },
   },
   {
@@ -53,4 +32,6 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-mongoose.model("InvestmentPlan", investmentPlanSchema)
+module.exports =
+  mongoose.models.InvestmentPlan ||
+  mongoose.model("InvestmentPlan", investmentPlanSchema);

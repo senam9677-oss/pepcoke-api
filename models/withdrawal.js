@@ -1,59 +1,42 @@
-const express = require("express");
-const auth = require("../middleware/auth");
-const Withdrawal = require("../models/Withdrawal");
+const mongoose = require("mongoose");
 
-const router = express.Router();
+const withdrawalSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-// Create Withdrawal
-router.post("/", auth, async (req, res) => {
-  try {
-    const {
-      amount,
-      paymentMethod,
-      accountNumber,
-      accountName,
-    } = req.body;
+    amount: {
+      type: Number,
+      required: true,
+    },
 
-    const withdrawal = await Withdrawal.create({
-      user: req.user.id,
-      amount,
-      paymentMethod,
-      accountNumber,
-      accountName,
-    });
+    paymentMethod: {
+      type: String,
+      required: true,
+    },
 
-    res.status(201).json({
-      success: true,
-      message: "Withdrawal request submitted successfully",
-      withdrawal,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    accountNumber: {
+      type: String,
+      required: true,
+    },
+
+    accountName: {
+      type: String,
+      required: true,
+    },
+
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+  },
+  {
+    timestamps: true,
   }
-});
+);
 
-// Get User Withdrawals
-router.get("/", auth, async (req, res) => {
-  try {
-    const withdrawals = await Withdrawal.find({
-      user: req.user.id,
-    }).sort({
-      createdAt: -1,
-    });
-
-    res.json({
-      success: true,
-      withdrawals,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-
-module.exports = router;
+module.exports = mongoose.model("Withdrawal", withdrawalSchema);

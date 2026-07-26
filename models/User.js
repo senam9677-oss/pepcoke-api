@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    fullName: {
+    name: {
       type: String,
       required: true,
     },
@@ -11,11 +11,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-    },
-
-    phone: {
-      type: String,
-      required: true,
     },
 
     password: {
@@ -28,24 +23,17 @@ const userSchema = new mongoose.Schema(
       default: 0,
     },
 
-    totalEarnings: {
-      type: Number,
-      default: 0,
-    },
-
     referralCode: {
       type: String,
-      default: "",
     },
 
     referredBy: {
       type: String,
-      default: "",
     },
 
-    isAdmin: {
-      type: Boolean,
-      default: false,
+    role: {
+      type: String,
+      default: "user",
     },
   },
   {

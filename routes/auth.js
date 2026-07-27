@@ -11,7 +11,7 @@ const router = express.Router();
 router.post("/register", async (req, res) => {
   try {
     const {
-      fullName,
+      name,
       email,
       phone,
       password,
@@ -33,7 +33,7 @@ router.post("/register", async (req, res) => {
 
 
     const user = await User.create({
-      fullName,
+      name,
       email,
       phone,
       password: hashedPassword,

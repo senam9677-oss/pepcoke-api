@@ -25,6 +25,7 @@ const planRoutes = require("./routes/plans");
 const depositRoutes = require("./routes/deposit");
 const withdrawalRoutes = require("./routes/withdrawal");
 const adminRoutes = require("./routes/admin");
+const investmentRoutes = require("./routes/investment");
 
 // Use Routes
 app.use("/api/auth", authRoutes);
@@ -32,6 +33,7 @@ app.use("/api/plans", planRoutes);
 app.use("/api/deposit", depositRoutes);
 app.use("/api/withdrawal", withdrawalRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/investments", investmentRoutes);
 
 // MongoDB Connection
 connectDB();

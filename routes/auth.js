@@ -6,6 +6,7 @@ const User = require("../models/User");
 
 const router = express.Router();
 
+
 // Register
 router.post("/register", async (req, res) => {
   try {
@@ -17,6 +18,7 @@ router.post("/register", async (req, res) => {
       referredBy
     } = req.body;
 
+
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -26,7 +28,9 @@ router.post("/register", async (req, res) => {
       });
     }
 
+
     const hashedPassword = await bcrypt.hash(password, 10);
+
 
     const user = await User.create({
       fullName,
@@ -36,11 +40,18 @@ router.post("/register", async (req, res) => {
       referredBy
     });
 
+
     res.status(201).json({
       success: true,
       message: "Registration successful",
-      user
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone
+      }
     });
+
 
   } catch (error) {
     res.status(500).json({
@@ -50,14 +61,21 @@ router.post("/register", async (req, res) => {
   }
 });
 
+
+
 // Login
 router.post("/login", async (req, res) => {
 
   try {
 
-    const { email, password } = req.body;
+    const {
+      email,
+      password
+    } = req.body;
+
 
     const user = await User.findOne({ email });
+
 
     if (!user) {
       return res.status(400).json({
@@ -66,10 +84,12 @@ router.post("/login", async (req, res) => {
       });
     }
 
+
     const validPassword = await bcrypt.compare(
       password,
       user.password
     );
+
 
     if (!validPassword) {
       return res.status(400).json({
@@ -77,6 +97,7 @@ router.post("/login", async (req, res) => {
         message: "Invalid email or password"
       });
     }
+
 
     const token = jwt.sign(
       {
@@ -88,11 +109,19 @@ router.post("/login", async (req, res) => {
       }
     );
 
+
     res.json({
       success: true,
       token,
-      user
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        balance: user.balance
+      }
     });
+
 
   } catch (error) {
 
@@ -104,5 +133,6 @@ router.post("/login", async (req, res) => {
   }
 
 });
+
 
 module.exports = router;

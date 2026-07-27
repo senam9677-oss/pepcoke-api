@@ -7,14 +7,15 @@ const router = express.Router();
 // Create Deposit
 router.post("/", auth, async (req, res) => {
   try {
-    const { amount, paymentMethod, transactionId } = req.body;
+    const { amount, paymentMethod, transactionId, plan } = req.body;
 
     const deposit = await Deposit.create({
-      user: req.user.id,
-      amount,
-      paymentMethod,
-      transactionId,
-    });
+  user: req.user.id,
+  plan,
+  amount,
+  paymentMethod,
+  transactionId,
+});
 
     res.status(201).json({
       success: true,

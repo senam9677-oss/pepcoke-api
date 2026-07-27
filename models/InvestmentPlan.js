@@ -17,7 +17,7 @@ const investmentPlanSchema = new mongoose.Schema(
       required: true,
     },
 
-    percentage: {
+    returnPercentage: {
       type: Number,
       required: true,
     },
@@ -25,6 +25,11 @@ const investmentPlanSchema = new mongoose.Schema(
     totalReturn: {
       type: Number,
       required: true,
+    },
+
+    active: {
+      type: Boolean,
+      default: true,
     },
   },
   {

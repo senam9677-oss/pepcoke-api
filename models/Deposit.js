@@ -8,6 +8,12 @@ const depositSchema = new mongoose.Schema(
       required: true,
     },
 
+    plan: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "InvestmentPlan",
+  required: true,
+},
+
     amount: {
       type: Number,
       required: true,

@@ -111,16 +111,16 @@ router.post("/login", async (req, res) => {
 
 
     res.json({
-      success: true,
-      token,
-      user: {
+    success: true,
+    token,
+    user: {
         id: user._id,
-        fullName: user.fullName,
+        name: user.name,
         email: user.email,
-        phone: user.phone,
-        balance: user.balance
-      }
-    });
+        balance: user.balance,
+        totalEarnings: user.totalEarnings || 0
+    }
+});
 
 
   } catch (error) {

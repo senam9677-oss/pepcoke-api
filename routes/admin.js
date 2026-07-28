@@ -37,9 +37,9 @@ router.get("/users", auth, async (req, res) => {
 router.get("/deposits", auth, async (req, res) => {
   try {
 
-    const deposits = await Deposit.find()
-      .populate("user")
-      .populate("plan");
+    const deposits = await Deposit.find();
+
+console.log(deposits);
 
     res.json({
       success: true,

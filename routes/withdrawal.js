@@ -1,57 +1,109 @@
 const express = require("express");
+const auth = require("../middleware/auth");
+
 const router = express.Router();
 
 const Withdrawal = require("../models/Withdrawal");
 
-// Create a withdrawal request
-router.post("/", async (req, res) => {
+
+// Create Withdrawal Request
+router.post("/", auth, async (req, res) => {
+
   try {
+
     const {
-      user,
+
       amount,
+
       paymentMethod,
+
       accountNumber,
-      accountName,
+
+      accountName
+
     } = req.body;
 
-    const withdrawal = new Withdrawal({
-      user,
+
+    const withdrawal = await Withdrawal.create({
+
+      user: req.user.id,
+
       amount,
+
       paymentMethod,
+
       accountNumber,
+
       accountName,
+
+      status: "Pending"
+
     });
 
-    await withdrawal.save();
 
     res.status(201).json({
+
       success: true,
+
       message: "Withdrawal request submitted successfully",
-      withdrawal,
+
+      withdrawal
+
     });
+
+
   } catch (error) {
+
     res.status(500).json({
+
       success: false,
-      message: error.message,
+
+      message: error.message
+
     });
+
   }
+
 });
 
-// Get all withdrawal requests
-router.get("/", async (req, res) => {
+
+// Get Logged-in User Withdrawals
+router.get("/", auth, async (req, res) => {
+
   try {
-    const withdrawals = await Withdrawal.find().populate("user");
+
+    const withdrawals = await Withdrawal.find({
+
+      user: req.user.id
+
+    }).sort({
+
+      createdAt: -1
+
+    });
+
 
     res.json({
+
       success: true,
-      withdrawals,
+
+      withdrawals
+
     });
+
   } catch (error) {
+
     res.status(500).json({
+
       success: false,
-      message: error.message,
+
+      message: error.message
+
     });
+
   }
+
 });
+
 
 module.exports = router;

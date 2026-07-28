@@ -36,7 +36,7 @@ router.post("/", auth, async (req, res) => {
 
       accountName,
 
-      status: "Pending"
+      status: "pending"
 
     });
 

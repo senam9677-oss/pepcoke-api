@@ -225,4 +225,42 @@ router.put("/withdrawal/:id", auth, async (req, res) => {
 
 
 
+
+// Suspend or Activate User
+router.put("/user/:id", auth, async (req, res) => {
+  try {
+
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    user.status =
+      user.status === "Active"
+        ? "Suspended"
+        : "Active";
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: `User ${user.status.toLowerCase()} successfully`,
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+
+  }
+});
+
+
+
 module.exports = router;

@@ -99,6 +99,14 @@ router.post("/login", async (req, res) => {
     }
 
 
+    if (user.status === "Suspended") {
+  return res.status(403).json({
+    success: false,
+    message: "Your account has been suspended. Please contact PEPCOKE support."
+  });
+}
+
+
     const token = jwt.sign(
       {
         id: user._id

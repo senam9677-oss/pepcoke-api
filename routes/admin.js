@@ -1,3 +1,4 @@
+const Notification = require("../models/Notification");
 const express = require("express");
 const auth = require("../middleware/auth");
 
@@ -197,6 +198,17 @@ router.put("/withdrawal/:id", auth, async (req, res) => {
     withdrawal.status = "approved";
 
     await withdrawal.save();
+
+    await Notification.create({
+
+  user: withdrawal.user,
+
+  title: "Withdrawal Approved",
+
+  message:
+    `Your withdrawal request of GH₵${withdrawal.amount} has been approved.`
+
+});
 
 
     res.json({

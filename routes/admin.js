@@ -194,7 +194,7 @@ router.put("/withdrawal/:id", auth, async (req, res) => {
     }
 
 
-    withdrawal.status = "Approved";
+    withdrawal.status = "approved";
 
     await withdrawal.save();
 

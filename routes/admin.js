@@ -12,15 +12,8 @@ const Notification = require("../models/Notification");
 
 const router = express.Router();
 
-
-// ======================================================
-// ADMIN SECURITY
-// ======================================================
-//
-// Every route below requires:
-// 1. A valid login token
-// 2. The logged-in user must have role: "admin"
-//
+const DAILY_RATE = 2.22;
+const INVESTMENT_DAYS = 365;
 
 
 // ======================================================
@@ -28,7 +21,6 @@ const router = express.Router();
 // ======================================================
 
 router.get("/users", auth, adminAuth, async (req, res) => {
-
   try {
 
     const users = await User.find()
@@ -48,7 +40,6 @@ router.get("/users", auth, adminAuth, async (req, res) => {
     });
 
   }
-
 });
 
 
@@ -57,12 +48,14 @@ router.get("/users", auth, adminAuth, async (req, res) => {
 // ======================================================
 
 router.get("/deposits", auth, adminAuth, async (req, res) => {
-
   try {
 
     const deposits = await Deposit.find()
       .populate("user", "name email phone")
-      .populate("plan", "name amount returnPercentage duration")
+      .populate(
+        "plan",
+        "name amount duration returnPercentage totalReturn"
+      )
       .sort({ createdAt: -1 });
 
     res.json({
@@ -78,7 +71,6 @@ router.get("/deposits", auth, adminAuth, async (req, res) => {
     });
 
   }
-
 });
 
 
@@ -87,84 +79,102 @@ router.get("/deposits", auth, adminAuth, async (req, res) => {
 // ======================================================
 
 router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
-
   try {
 
     const deposit = await Deposit.findById(req.params.id);
 
     if (!deposit) {
-
       return res.status(404).json({
         success: false,
         message: "Deposit not found."
       });
-
     }
 
 
-    // Prevent approving the same deposit twice
+    // Prevent double approval
 
     if (deposit.status === "Approved") {
-
       return res.status(400).json({
         success: false,
         message: "This deposit has already been approved."
       });
-
     }
 
 
     if (deposit.status === "Rejected") {
-
       return res.status(400).json({
         success: false,
         message: "A rejected deposit cannot be approved."
       });
-
     }
 
 
     const plan = await InvestmentPlan.findById(deposit.plan);
 
-    if (!plan) {
-
+    if (!plan || !plan.active) {
       return res.status(404).json({
         success: false,
-        message: "Investment plan not found."
+        message: "Investment plan not found or inactive."
       });
-
     }
 
 
     const user = await User.findById(deposit.user);
 
     if (!user) {
-
       return res.status(404).json({
         success: false,
         message: "User not found."
       });
-
     }
 
 
-    // Calculate earnings from the actual deposit amount
+    const investmentAmount = Number(deposit.amount);
+
+
+    if (
+      !Number.isFinite(investmentAmount) ||
+      investmentAmount <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid deposit amount."
+      });
+    }
+
+
+    // ==================================================
+    // 2.22% SIMPLE DAILY INTEREST
+    // ==================================================
 
     const dailyEarning =
-      (deposit.amount * plan.returnPercentage) / 100;
+      (investmentAmount * DAILY_RATE) / 100;
 
+
+    // ==================================================
+    // 365-DAY INVESTMENT
+    // ==================================================
 
     const startDate = new Date();
-
 
     const endDate = new Date(startDate);
 
     endDate.setDate(
-      endDate.getDate() + 365
+      endDate.getDate() + INVESTMENT_DAYS
     );
 
 
-    // Create investment
+    const totalInterest =
+      dailyEarning * INVESTMENT_DAYS;
+
+
+    const totalReturn =
+      investmentAmount + totalInterest;
+
+
+    // ==================================================
+    // CREATE INVESTMENT
+    // ==================================================
 
     const investment = await Investment.create({
 
@@ -172,11 +182,11 @@ router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
 
       plan: plan._id,
 
-      amount: deposit.amount,
+      amount: investmentAmount,
 
       dailyEarning,
 
-      totalReturn: plan.totalReturn,
+      totalReturn,
 
       status: "Active",
 
@@ -187,21 +197,27 @@ router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
     });
 
 
-    // Update deposit
+    // ==================================================
+    // UPDATE DEPOSIT
+    // ==================================================
 
     deposit.status = "Approved";
 
     await deposit.save();
 
 
-    // Add deposited money to user's balance
+    // ==================================================
+    // UPDATE USER BALANCE
+    // ==================================================
 
-    user.balance += deposit.amount;
+    user.balance += investmentAmount;
 
     await user.save();
 
 
-    // Send notification
+    // ==================================================
+    // NOTIFICATION
+    // ==================================================
 
     await Notification.create({
 
@@ -210,7 +226,7 @@ router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
       title: "Deposit Approved",
 
       message:
-        `Your deposit of GH₵${deposit.amount.toFixed(2)} has been approved.`
+        `Your deposit of GH₵${investmentAmount.toFixed(2)} has been approved and your investment has been activated.`
 
     });
 
@@ -219,7 +235,8 @@ router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
 
       success: true,
 
-      message: "Deposit approved and investment created.",
+      message:
+        "Deposit approved and investment created successfully.",
 
       investment
 
@@ -238,7 +255,6 @@ router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
     });
 
   }
-
 });
 
 
@@ -246,224 +262,256 @@ router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
 // REJECT DEPOSIT
 // ======================================================
 
-router.put("/deposit/:id/reject", auth, adminAuth, async (req, res) => {
+router.put(
+  "/deposit/:id/reject",
+  auth,
+  adminAuth,
+  async (req, res) => {
 
-  try {
+    try {
 
-    const deposit = await Deposit.findById(req.params.id);
+      const deposit =
+        await Deposit.findById(req.params.id);
 
-    if (!deposit) {
 
-      return res.status(404).json({
+      if (!deposit) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message: "Deposit not found."
+
+        });
+
+      }
+
+
+      if (deposit.status !== "Pending") {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            `This deposit is already ${deposit.status}.`
+
+        });
+
+      }
+
+
+      deposit.status = "Rejected";
+
+      await deposit.save();
+
+
+      await Notification.create({
+
+        user: deposit.user,
+
+        title: "Deposit Rejected",
+
+        message:
+          `Your deposit of GH₵${deposit.amount.toFixed(2)} has been rejected.`
+
+      });
+
+
+      res.json({
+
+        success: true,
+
+        message: "Deposit rejected."
+
+      });
+
+    } catch (error) {
+
+      res.status(500).json({
+
         success: false,
-        message: "Deposit not found."
+
+        message: error.message
+
       });
 
     }
-
-
-    if (deposit.status !== "Pending") {
-
-      return res.status(400).json({
-        success: false,
-        message: `This deposit is already ${deposit.status}.`
-      });
-
-    }
-
-
-    deposit.status = "Rejected";
-
-    await deposit.save();
-
-
-    await Notification.create({
-
-      user: deposit.user,
-
-      title: "Deposit Rejected",
-
-      message:
-        `Your deposit of GH₵${deposit.amount.toFixed(2)} has been rejected.`
-
-    });
-
-
-    res.json({
-
-      success: true,
-
-      message: "Deposit rejected."
-
-    });
-
-  } catch (error) {
-
-    res.status(500).json({
-
-      success: false,
-
-      message: error.message
-
-    });
 
   }
-
-});
+);
 
 
 // ======================================================
 // GET ALL WITHDRAWALS
 // ======================================================
 
-router.get("/withdrawals", auth, adminAuth, async (req, res) => {
+router.get(
+  "/withdrawals",
+  auth,
+  adminAuth,
+  async (req, res) => {
 
-  try {
+    try {
 
-    const withdrawals = await Withdrawal.find()
-      .populate("user", "name email phone balance")
-      .sort({ createdAt: -1 });
+      const withdrawals =
+        await Withdrawal.find()
+          .populate(
+            "user",
+            "name email phone balance"
+          )
+          .sort({
+            createdAt: -1
+          });
 
-    res.json({
 
-      success: true,
+      res.json({
 
-      withdrawals
+        success: true,
 
-    });
+        withdrawals
 
-  } catch (error) {
+      });
 
-    res.status(500).json({
+    } catch (error) {
 
-      success: false,
+      res.status(500).json({
 
-      message: error.message
+        success: false,
 
-    });
+        message: error.message
+
+      });
+
+    }
 
   }
-
-});
+);
 
 
 // ======================================================
 // APPROVE WITHDRAWAL
 // ======================================================
 
-router.put("/withdrawal/:id", auth, adminAuth, async (req, res) => {
+router.put(
+  "/withdrawal/:id",
+  auth,
+  adminAuth,
+  async (req, res) => {
 
-  try {
+    try {
 
-    const withdrawal =
-      await Withdrawal.findById(req.params.id);
-
-
-    if (!withdrawal) {
-
-      return res.status(404).json({
-
-        success: false,
-
-        message: "Withdrawal not found."
-
-      });
-
-    }
+      const withdrawal =
+        await Withdrawal.findById(req.params.id);
 
 
-    if (withdrawal.status !== "pending") {
+      if (!withdrawal) {
 
-      return res.status(400).json({
+        return res.status(404).json({
 
-        success: false,
+          success: false,
+
+          message: "Withdrawal not found."
+
+        });
+
+      }
+
+
+      if (withdrawal.status !== "pending") {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            `This withdrawal is already ${withdrawal.status}.`
+
+        });
+
+      }
+
+
+      const user =
+        await User.findById(withdrawal.user);
+
+
+      if (!user) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message: "User not found."
+
+        });
+
+      }
+
+
+      if (user.balance < withdrawal.amount) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            "User does not have enough available balance."
+
+        });
+
+      }
+
+
+      user.balance -= withdrawal.amount;
+
+      await user.save();
+
+
+      withdrawal.status = "approved";
+
+      await withdrawal.save();
+
+
+      await Notification.create({
+
+        user: withdrawal.user,
+
+        title: "Withdrawal Approved",
 
         message:
-          `This withdrawal is already ${withdrawal.status}.`
+          `Your withdrawal request of GH₵${withdrawal.amount.toFixed(2)} has been approved.`
 
       });
 
-    }
 
+      res.json({
 
-    const user =
-      await User.findById(withdrawal.user);
+        success: true,
 
+        message: "Withdrawal approved."
 
-    if (!user) {
+      });
 
-      return res.status(404).json({
+    } catch (error) {
+
+      console.error(
+        "Approve withdrawal error:",
+        error
+      );
+
+      res.status(500).json({
 
         success: false,
 
-        message: "User not found."
+        message: error.message
 
       });
 
     }
-
-
-    if (user.balance < withdrawal.amount) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-          "User does not have enough available balance."
-
-      });
-
-    }
-
-
-    // Deduct the withdrawal from balance
-
-    user.balance -= withdrawal.amount;
-
-    await user.save();
-
-
-    withdrawal.status = "approved";
-
-    await withdrawal.save();
-
-
-    await Notification.create({
-
-      user: withdrawal.user,
-
-      title: "Withdrawal Approved",
-
-      message:
-        `Your withdrawal request of GH₵${withdrawal.amount.toFixed(2)} has been approved.`
-
-    });
-
-
-    res.json({
-
-      success: true,
-
-      message: "Withdrawal approved."
-
-    });
-
-  } catch (error) {
-
-    console.error("Approve withdrawal error:", error);
-
-    res.status(500).json({
-
-      success: false,
-
-      message: error.message
-
-    });
 
   }
-
-});
+);
 
 
 // ======================================================
@@ -554,95 +602,108 @@ router.put(
 // SUSPEND / ACTIVATE USER
 // ======================================================
 
-router.put("/user/:id", auth, adminAuth, async (req, res) => {
+router.put(
+  "/user/:id",
+  auth,
+  adminAuth,
+  async (req, res) => {
 
-  try {
+    try {
 
-    const user =
-      await User.findById(req.params.id);
+      const user =
+        await User.findById(req.params.id);
 
 
-    if (!user) {
+      if (!user) {
 
-      return res.status(404).json({
+        return res.status(404).json({
+
+          success: false,
+
+          message: "User not found."
+
+        });
+
+      }
+
+
+      user.status =
+        user.status === "Active"
+          ? "Suspended"
+          : "Active";
+
+
+      await user.save();
+
+
+      res.json({
+
+        success: true,
+
+        message:
+          `User ${user.status.toLowerCase()} successfully.`,
+
+        status: user.status
+
+      });
+
+    } catch (error) {
+
+      res.status(500).json({
 
         success: false,
 
-        message: "User not found."
+        message: error.message
 
       });
 
     }
 
-
-    user.status =
-      user.status === "Active"
-        ? "Suspended"
-        : "Active";
-
-
-    await user.save();
-
-
-    res.json({
-
-      success: true,
-
-      message:
-        `User ${user.status.toLowerCase()} successfully.`,
-
-      status: user.status
-
-    });
-
-  } catch (error) {
-
-    res.status(500).json({
-
-      success: false,
-
-      message: error.message
-
-    });
-
   }
-
-});
+);
 
 
 // ======================================================
 // GET ALL INVESTMENT PLANS
 // ======================================================
 
-router.get("/plans", auth, adminAuth, async (req, res) => {
+router.get(
+  "/plans",
+  auth,
+  adminAuth,
+  async (req, res) => {
 
-  try {
+    try {
 
-    const plans =
-      await InvestmentPlan.find()
-        .sort({ amount: 1 });
+      const plans =
+        await InvestmentPlan.find()
+          .sort({
+            amount: 1
+          });
 
-    res.json({
 
-      success: true,
+      res.json({
 
-      plans
+        success: true,
 
-    });
+        plans
 
-  } catch (error) {
+      });
 
-    res.status(500).json({
+    } catch (error) {
 
-      success: false,
+      res.status(500).json({
 
-      message: error.message
+        success: false,
 
-    });
+        message: error.message
+
+      });
+
+    }
 
   }
-
-});
+);
 
 
 module.exports = router;

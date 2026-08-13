@@ -1,116 +1,98 @@
 const express = require("express");
 const auth = require("../middleware/auth");
 
+const User = require("../models/User");
 const Investment = require("../models/Investment");
 const Deposit = require("../models/Deposit");
 const Withdrawal = require("../models/Withdrawal");
-const User = require("../models/User");
 
 const router = express.Router();
 
 
-// ======================================================
-// GET CUSTOMER DASHBOARD
-// ======================================================
+// ==========================================
+// GET USER DASHBOARD
+// ==========================================
 
 router.get("/", auth, async (req, res) => {
 
   try {
 
-    // Get the logged-in user
+    // ========================================
+    // GET USER
+    // ========================================
+
     const user = await User.findById(req.user.id)
       .select("-password");
 
+
     if (!user) {
+
       return res.status(404).json({
+
         success: false,
-        message: "User account not found."
+
+        message: "User not found"
+
       });
+
     }
 
 
-    // ==================================================
+    // ========================================
     // GET INVESTMENTS
-    // ==================================================
+    // ========================================
 
     const investments = await Investment.find({
+
       user: req.user.id
-    })
-      .populate(
-        "plan",
-        "name amount duration returnPercentage totalReturn"
-      )
-      .sort({
-        createdAt: -1
-      });
+
+    }).populate("plan");
 
 
-    // ==================================================
+    // ========================================
     // GET DEPOSITS
-    // ==================================================
+    // ========================================
 
     const deposits = await Deposit.find({
+
       user: req.user.id
-    })
-      .populate(
-        "plan",
-        "name amount"
-      )
-      .sort({
-        createdAt: -1
-      });
+
+    }).sort({
+
+      createdAt: -1
+
+    });
 
 
-    // ==================================================
+    // ========================================
     // GET WITHDRAWALS
-    // ==================================================
+    // ========================================
 
     const withdrawals = await Withdrawal.find({
+
       user: req.user.id
-    })
-      .sort({
-        createdAt: -1
-      });
+
+    }).sort({
+
+      createdAt: -1
+
+    });
 
 
-    // ==================================================
+    // ========================================
     // ACTIVE INVESTMENTS
-    // ==================================================
+    // ========================================
 
     const activeInvestments =
       investments.filter(
         investment =>
           investment.status === "Active"
-      );
+      ).length;
 
 
-    // ==================================================
-    // TOTAL INVESTED
-    // ==================================================
-
-    const totalInvested =
-      investments.reduce(
-        (total, investment) =>
-          total + Number(investment.amount || 0),
-        0
-      );
-
-
-    // ==================================================
-    // TOTAL EARNINGS
-    // ==================================================
-
-    const totalEarnings =
-      activeInvestments.reduce(
-        (total, investment) =>
-          total + Number(investment.dailyEarning || 0),
-        0
-      );
-
-
-    // ==================================================
+    // ========================================
     // TOTAL DEPOSITS
-    // ==================================================
+    // ========================================
 
     const totalDeposits =
       deposits
@@ -125,9 +107,9 @@ router.get("/", auth, async (req, res) => {
         );
 
 
-    // ==================================================
+    // ========================================
     // TOTAL WITHDRAWALS
-    // ==================================================
+    // ========================================
 
     const totalWithdrawals =
       withdrawals
@@ -142,12 +124,33 @@ router.get("/", auth, async (req, res) => {
         );
 
 
-    // ==================================================
-    // RECENT TRANSACTIONS
-    // ==================================================
+    // ========================================
+    // TOTAL EARNINGS
+    // ========================================
+    //
+    // At this stage, earnings are calculated
+    // from the daily earnings recorded on
+    // active investments.
+    //
+    // We will build the automatic daily
+    // earnings system separately.
+    //
 
-    const recentDeposits =
-      deposits.slice(0, 5).map(deposit => ({
+    const totalEarnings =
+      investments.reduce(
+        (total, investment) =>
+          total +
+          Number(investment.dailyEarning || 0),
+        0
+      );
+
+
+    // ========================================
+    // RECENT TRANSACTIONS
+    // ========================================
+
+    const depositTransactions =
+      deposits.map(deposit => ({
 
         type: "Deposit",
 
@@ -155,21 +158,13 @@ router.get("/", auth, async (req, res) => {
 
         status: deposit.status,
 
-        paymentMethod:
-          deposit.paymentMethod,
-
-        date: deposit.createdAt,
-
-        plan:
-          deposit.plan
-            ? deposit.plan.name
-            : null
+        date: deposit.createdAt
 
       }));
 
 
-    const recentWithdrawals =
-      withdrawals.slice(0, 5).map(withdrawal => ({
+    const withdrawalTransactions =
+      withdrawals.map(withdrawal => ({
 
         type: "Withdrawal",
 
@@ -177,29 +172,26 @@ router.get("/", auth, async (req, res) => {
 
         status: withdrawal.status,
 
-        paymentMethod:
-          withdrawal.paymentMethod,
-
         date: withdrawal.createdAt
 
       }));
 
 
     const transactions = [
-      ...recentDeposits,
-      ...recentWithdrawals
+      ...depositTransactions,
+      ...withdrawalTransactions
     ]
       .sort(
         (a, b) =>
           new Date(b.date) -
           new Date(a.date)
       )
-      .slice(0, 10);
+      .slice(0, 5);
 
 
-    // ==================================================
-    // RESPONSE
-    // ==================================================
+    // ========================================
+    // SEND DASHBOARD DATA
+    // ========================================
 
     res.json({
 
@@ -213,24 +205,13 @@ router.get("/", auth, async (req, res) => {
 
         email: user.email,
 
-        phone: user.phone,
-
-        referralCode:
-          user.referralCode,
-
-        role: user.role,
-
-        status: user.status
+        phone: user.phone
 
       },
 
-      balance:
-        Number(user.balance || 0),
+      balance: user.balance || 0,
 
-      activeInvestments:
-        activeInvestments.length,
-
-      totalInvested,
+      activeInvestments,
 
       totalEarnings,
 
@@ -238,9 +219,9 @@ router.get("/", auth, async (req, res) => {
 
       totalWithdrawals,
 
-      investments,
+      transactions,
 
-      transactions
+      investments
 
     });
 
@@ -251,6 +232,7 @@ router.get("/", auth, async (req, res) => {
       "Dashboard error:",
       error
     );
+
 
     res.status(500).json({
 

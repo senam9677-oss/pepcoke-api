@@ -78,184 +78,201 @@ router.get("/deposits", auth, adminAuth, async (req, res) => {
 // APPROVE DEPOSIT
 // ======================================================
 
-router.put("/deposit/:id", auth, adminAuth, async (req, res) => {
-  try {
+router.put(
+  "/deposit/:id",
+  auth,
+  adminAuth,
+  async (req, res) => {
 
-    const deposit = await Deposit.findById(req.params.id);
+    try {
 
-    if (!deposit) {
-      return res.status(404).json({
-        success: false,
-        message: "Deposit not found."
+      // ==========================================
+      // FIND DEPOSIT
+      // ==========================================
+
+      const deposit =
+        await Deposit.findById(req.params.id);
+
+
+      if (!deposit) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message: "Deposit not found."
+
+        });
+
+      }
+
+
+      // ==========================================
+      // PREVENT DOUBLE APPROVAL
+      // ==========================================
+
+      if (deposit.status === "Approved") {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            "This deposit has already been approved."
+
+        });
+
+      }
+
+
+      // ==========================================
+      // PREVENT APPROVING REJECTED DEPOSIT
+      // ==========================================
+
+      if (deposit.status === "Rejected") {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            "A rejected deposit cannot be approved."
+
+        });
+
+      }
+
+
+      // ==========================================
+      // FIND USER
+      // ==========================================
+
+      const user =
+        await User.findById(deposit.user);
+
+
+      if (!user) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message: "User not found."
+
+        });
+
+      }
+
+
+      // ==========================================
+      // VALIDATE AMOUNT
+      // ==========================================
+
+      const depositAmount =
+        Number(deposit.amount);
+
+
+      if (
+        !Number.isFinite(depositAmount) ||
+        depositAmount < 100
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            "Invalid deposit amount."
+
+        });
+
+      }
+
+
+      // ==========================================
+      // APPROVE DEPOSIT
+      // ==========================================
+
+      deposit.status = "Approved";
+
+      await deposit.save();
+
+
+      // ==========================================
+      // ADD MONEY TO USER BALANCE
+      // ==========================================
+
+      user.balance =
+        Number(user.balance || 0) +
+        depositAmount;
+
+      await user.save();
+
+
+      // ==========================================
+      // NOTIFICATION
+      // ==========================================
+
+      await Notification.create({
+
+        user: deposit.user,
+
+        title: "Deposit Approved",
+
+        message:
+          `Your deposit of GH₵${depositAmount.toFixed(2)} has been approved and added to your available balance.`
+
       });
-    }
 
 
-    // Prevent double approval
+      // ==========================================
+      // RESPONSE
+      // ==========================================
 
-    if (deposit.status === "Approved") {
-      return res.status(400).json({
-        success: false,
-        message: "This deposit has already been approved."
+      res.json({
+
+        success: true,
+
+        message:
+          "Deposit approved and balance updated successfully.",
+
+        deposit: {
+
+          id: deposit._id,
+
+          amount: depositAmount,
+
+          status: deposit.status
+
+        },
+
+        balance:
+          user.balance
+
       });
-    }
 
 
-    if (deposit.status === "Rejected") {
-      return res.status(400).json({
+    } catch (error) {
+
+      console.error(
+        "Approve deposit error:",
+        error
+      );
+
+
+      res.status(500).json({
+
         success: false,
-        message: "A rejected deposit cannot be approved."
+
+        message:
+          error.message
+
       });
+
     }
-
-
-    const plan = await InvestmentPlan.findById(deposit.plan);
-
-    if (!plan || !plan.active) {
-      return res.status(404).json({
-        success: false,
-        message: "Investment plan not found or inactive."
-      });
-    }
-
-
-    const user = await User.findById(deposit.user);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found."
-      });
-    }
-
-
-    const investmentAmount = Number(deposit.amount);
-
-
-    if (
-      !Number.isFinite(investmentAmount) ||
-      investmentAmount <= 0
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid deposit amount."
-      });
-    }
-
-
-    // ==================================================
-    // 2.22% SIMPLE DAILY INTEREST
-    // ==================================================
-
-    const dailyEarning =
-      (investmentAmount * DAILY_RATE) / 100;
-
-
-    // ==================================================
-    // 365-DAY INVESTMENT
-    // ==================================================
-
-    const startDate = new Date();
-
-    const endDate = new Date(startDate);
-
-    endDate.setDate(
-      endDate.getDate() + INVESTMENT_DAYS
-    );
-
-
-    const totalInterest =
-      dailyEarning * INVESTMENT_DAYS;
-
-
-    const totalReturn =
-      investmentAmount + totalInterest;
-
-
-    // ==================================================
-    // CREATE INVESTMENT
-    // ==================================================
-
-    const investment = await Investment.create({
-
-      user: deposit.user,
-
-      plan: plan._id,
-
-      amount: investmentAmount,
-
-      dailyEarning,
-
-      totalReturn,
-
-      status: "Active",
-
-      startDate,
-
-      endDate
-
-    });
-
-
-    // ==================================================
-    // UPDATE DEPOSIT
-    // ==================================================
-
-    deposit.status = "Approved";
-
-    await deposit.save();
-
-
-    // ==================================================
-    // UPDATE USER BALANCE
-    // ==================================================
-
-    user.balance += investmentAmount;
-
-    await user.save();
-
-
-    // ==================================================
-    // NOTIFICATION
-    // ==================================================
-
-    await Notification.create({
-
-      user: deposit.user,
-
-      title: "Deposit Approved",
-
-      message:
-        `Your deposit of GH₵${investmentAmount.toFixed(2)} has been approved and your investment has been activated.`
-
-    });
-
-
-    res.json({
-
-      success: true,
-
-      message:
-        "Deposit approved and investment created successfully.",
-
-      investment
-
-    });
-
-  } catch (error) {
-
-    console.error("Approve deposit error:", error);
-
-    res.status(500).json({
-
-      success: false,
-
-      message: error.message
-
-    });
 
   }
-});
+);
 
 
 // ======================================================
@@ -274,9 +291,7 @@ router.put(
         await Deposit.findById(req.params.id);
 
 
-      if (!deposit) {
-
-        return res.status(404).json({
+      if us(404).json({
 
           success: false,
 

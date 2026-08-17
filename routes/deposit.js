@@ -17,9 +17,7 @@ router.post("/", auth, async (req, res) => {
     const {
       amount,
       paymentMethod,
-      transactionId,
-      senderName,
-      senderPhone
+      transactionId
     } = req.body;
 
 
@@ -27,9 +25,11 @@ router.post("/", auth, async (req, res) => {
     // VALIDATE AMOUNT
     // ========================================
 
+    const depositAmount = Number(amount);
+
     if (
-      !Number.isFinite(Number(amount)) ||
-      Number(amount) < 100
+      !Number.isFinite(depositAmount) ||
+      depositAmount < 100
     ) {
 
       return res.status(400).json({
@@ -48,7 +48,7 @@ router.post("/", auth, async (req, res) => {
     // VALIDATE PAYMENT METHOD
     // ========================================
 
-    if (!paymentMethod) {
+    if (!paymentMethod || !paymentMethod.trim()) {
 
       return res.status(400).json({
 
@@ -63,10 +63,31 @@ router.post("/", auth, async (req, res) => {
 
 
     // ========================================
+    // MTN ONLY
+    // ========================================
+
+    if (paymentMethod !== "MTN Mobile Money") {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Only MTN Mobile Money is currently available."
+
+      });
+
+    }
+
+
+    // ========================================
     // VALIDATE TRANSACTION ID
     // ========================================
 
-    if (!transactionId || !transactionId.trim()) {
+    if (
+      !transactionId ||
+      !transactionId.trim()
+    ) {
 
       return res.status(400).json({
 
@@ -81,42 +102,6 @@ router.post("/", auth, async (req, res) => {
 
 
     // ========================================
-    // VALIDATE SENDER NAME
-    // ========================================
-
-    if (!senderName || !senderName.trim()) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-          "Sender name is required."
-
-      });
-
-    }
-
-
-    // ========================================
-    // VALIDATE SENDER PHONE
-    // ========================================
-
-    if (!senderPhone || !senderPhone.trim()) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-          "Sender phone number is required."
-
-      });
-
-    }
-
-
-    // ========================================
     // CREATE DEPOSIT
     // ========================================
 
@@ -124,18 +109,13 @@ router.post("/", auth, async (req, res) => {
 
       user: req.user.id,
 
-      amount: Number(amount),
+      amount: depositAmount,
 
-      paymentMethod,
+      paymentMethod:
+        paymentMethod.trim(),
 
       transactionId:
         transactionId.trim(),
-
-      senderName:
-        senderName.trim(),
-
-      senderPhone:
-        senderPhone.trim(),
 
       status: "Pending"
 
@@ -146,7 +126,7 @@ router.post("/", auth, async (req, res) => {
     // RESPONSE
     // ========================================
 
-    res.status(201).json({
+    return res.status(201).json({
 
       success: true,
 
@@ -166,7 +146,7 @@ router.post("/", auth, async (req, res) => {
     );
 
 
-    res.status(500).json({
+    return res.status(500).json({
 
       success: false,
 
@@ -181,7 +161,7 @@ router.post("/", auth, async (req, res) => {
 
 
 // ==========================================
-// GET USER DEPOSITS
+// GET LOGGED-IN USER DEPOSITS
 // ==========================================
 
 router.get("/", auth, async (req, res) => {
@@ -197,7 +177,7 @@ router.get("/", auth, async (req, res) => {
       });
 
 
-    res.json({
+    return res.json({
 
       success: true,
 
@@ -214,7 +194,7 @@ router.get("/", auth, async (req, res) => {
     );
 
 
-    res.status(500).json({
+    return res.status(500).json({
 
       success: false,
 

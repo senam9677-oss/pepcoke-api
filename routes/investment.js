@@ -1,21 +1,22 @@
 const express = require("express");
 const auth = require("../middleware/auth");
 
+const User = require("../models/User");
 const Investment = require("../models/Investment");
 const InvestmentPlan = require("../models/InvestmentPlan");
-const Deposit = require("../models/Deposit");
 
 const router = express.Router();
 
 
 // ======================================================
-// CREATE INVESTMENT
+// CREATE INVESTMENT FROM APPROVED BALANCE
 // ======================================================
 
 router.post("/", auth, async (req, res) => {
 
   try {
 
+    // Only the plan ID is needed
     const { plan } = req.body;
 
 
@@ -37,7 +38,28 @@ router.post("/", auth, async (req, res) => {
 
 
     // ==================================================
-    // FIND PLAN
+    // FIND USER
+    // ==================================================
+
+    const user =
+      await User.findById(req.user.id);
+
+
+    if (!user) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: "User not found."
+
+      });
+
+    }
+
+
+    // ==================================================
+    // FIND INVESTMENT PLAN
     // ==================================================
 
     const investmentPlan =
@@ -62,58 +84,6 @@ router.post("/", auth, async (req, res) => {
 
 
     // ==================================================
-    // GET APPROVED DEPOSITS
-    // ==================================================
-
-    const approvedDeposits =
-      await Deposit.find({
-
-        user: req.user.id,
-
-        status: "Approved"
-
-      });
-
-
-    const totalApprovedDeposits =
-      approvedDeposits.reduce(
-        (total, deposit) =>
-          total + Number(deposit.amount || 0),
-        0
-      );
-
-
-    // ==================================================
-    // GET EXISTING INVESTMENTS
-    // ==================================================
-
-    const existingInvestments =
-      await Investment.find({
-
-        user: req.user.id,
-
-        status: "Active"
-
-      });
-
-
-    const totalInvested =
-      existingInvestments.reduce(
-        (total, investment) =>
-          total + Number(investment.amount || 0),
-        0
-      );
-
-
-    // ==================================================
-    // AVAILABLE BALANCE
-    // ==================================================
-
-    const availableBalance =
-      totalApprovedDeposits - totalInvested;
-
-
-    // ==================================================
     // PLAN AMOUNT
     // ==================================================
 
@@ -121,12 +91,9 @@ router.post("/", auth, async (req, res) => {
       Number(investmentPlan.amount);
 
 
-    // ==================================================
-    // CHECK AVAILABLE BALANCE
-    // ==================================================
-
     if (
-      availableBalance < investmentAmount
+      !Number.isFinite(investmentAmount) ||
+      investmentAmount <= 0
     ) {
 
       return res.status(400).json({
@@ -134,7 +101,7 @@ router.post("/", auth, async (req, res) => {
         success: false,
 
         message:
-          `Insufficient balance. You need GH₵${investmentAmount.toLocaleString()} to choose this plan, but your available balance is GH₵${availableBalance.toLocaleString()}.`
+          "Invalid investment plan amount."
 
       });
 
@@ -142,7 +109,42 @@ router.post("/", auth, async (req, res) => {
 
 
     // ==================================================
-    // DAILY RATE
+    // CHECK AVAILABLE BALANCE
+    // ==================================================
+
+    const currentBalance =
+      Number(user.balance) || 0;
+
+
+    if (currentBalance < investmentAmount) {
+
+      const needed =
+        investmentAmount - currentBalance;
+
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          `Insufficient balance. You need GH₵${needed.toFixed(2)} more.`,
+
+        balance:
+          currentBalance,
+
+        planAmount:
+          investmentAmount,
+
+        additionalAmountNeeded:
+          needed
+
+      });
+
+    }
+
+
+    // ==================================================
+    // DAILY EARNING
     // ==================================================
 
     const DAILY_RATE = 2.22;
@@ -153,13 +155,16 @@ router.post("/", auth, async (req, res) => {
 
 
     // ==================================================
-    // INVESTMENT PERIOD
+    // INVESTMENT DATES
     // ==================================================
 
-    const startDate = new Date();
+    const startDate =
+      new Date();
+
 
     const endDate =
       new Date(startDate);
+
 
     endDate.setDate(
       endDate.getDate() + 365
@@ -167,19 +172,26 @@ router.post("/", auth, async (req, res) => {
 
 
     // ==================================================
-    // TOTAL INTEREST
+    // TOTAL RETURN
     // ==================================================
 
     const totalInterest =
       dailyEarning * 365;
 
 
-    // ==================================================
-    // TOTAL RETURN
-    // ==================================================
-
     const totalReturn =
       investmentAmount + totalInterest;
+
+
+    // ==================================================
+    // DEDUCT PLAN AMOUNT FROM BALANCE
+    // ==================================================
+
+    user.balance =
+      currentBalance - investmentAmount;
+
+
+    await user.save();
 
 
     // ==================================================
@@ -189,7 +201,7 @@ router.post("/", auth, async (req, res) => {
     const investment =
       await Investment.create({
 
-        user: req.user.id,
+        user: user._id,
 
         plan: investmentPlan._id,
 
@@ -209,7 +221,7 @@ router.post("/", auth, async (req, res) => {
 
 
     // ==================================================
-    // RESPONSE
+    // SUCCESS
     // ==================================================
 
     res.status(201).json({
@@ -217,22 +229,12 @@ router.post("/", auth, async (req, res) => {
       success: true,
 
       message:
-        "Investment created successfully.",
+        "Investment plan activated successfully.",
 
       investment,
 
-      balance: {
-
-        previous:
-          availableBalance,
-
-        invested:
-          investmentAmount,
-
-        remaining:
-          availableBalance - investmentAmount
-
-      }
+      balance:
+        user.balance
 
     });
 

@@ -3,6 +3,7 @@ const auth = require("../middleware/auth");
 
 const Investment = require("../models/Investment");
 const InvestmentPlan = require("../models/InvestmentPlan");
+const Deposit = require("../models/Deposit");
 
 const router = express.Router();
 
@@ -15,10 +16,12 @@ router.post("/", auth, async (req, res) => {
 
   try {
 
-    const { plan, amount } = req.body;
+    const { plan } = req.body;
 
 
-    // Check that a plan was provided
+    // ==================================================
+    // CHECK PLAN
+    // ==================================================
 
     if (!plan) {
 
@@ -33,59 +36,105 @@ router.post("/", auth, async (req, res) => {
     }
 
 
-    // Find the investment plan
+    // ==================================================
+    // FIND PLAN
+    // ==================================================
 
     const investmentPlan =
       await InvestmentPlan.findById(plan);
 
 
-    if (!investmentPlan || !investmentPlan.active) {
+    if (
+      !investmentPlan ||
+      !investmentPlan.active
+    ) {
 
       return res.status(404).json({
 
         success: false,
 
-        message: "Investment plan not found or inactive."
+        message:
+          "Investment plan not found or inactive."
 
       });
 
     }
 
 
-    // Use the actual investment amount
+    // ==================================================
+    // GET APPROVED DEPOSITS
+    // ==================================================
+
+    const approvedDeposits =
+      await Deposit.find({
+
+        user: req.user.id,
+
+        status: "Approved"
+
+      });
+
+
+    const totalApprovedDeposits =
+      approvedDeposits.reduce(
+        (total, deposit) =>
+          total + Number(deposit.amount || 0),
+        0
+      );
+
+
+    // ==================================================
+    // GET EXISTING INVESTMENTS
+    // ==================================================
+
+    const existingInvestments =
+      await Investment.find({
+
+        user: req.user.id,
+
+        status: "Active"
+
+      });
+
+
+    const totalInvested =
+      existingInvestments.reduce(
+        (total, investment) =>
+          total + Number(investment.amount || 0),
+        0
+      );
+
+
+    // ==================================================
+    // AVAILABLE BALANCE
+    // ==================================================
+
+    const availableBalance =
+      totalApprovedDeposits - totalInvested;
+
+
+    // ==================================================
+    // PLAN AMOUNT
+    // ==================================================
 
     const investmentAmount =
-      Number(amount || investmentPlan.amount);
+      Number(investmentPlan.amount);
 
 
-    // Make sure the amount is valid
+    // ==================================================
+    // CHECK AVAILABLE BALANCE
+    // ==================================================
 
     if (
-      !Number.isFinite(investmentAmount) ||
-      investmentAmount <= 0
+      availableBalance < investmentAmount
     ) {
 
       return res.status(400).json({
 
         success: false,
 
-        message: "Invalid investment amount."
-
-      });
-
-    }
-
-
-    // Make sure the amount matches the plan
-
-    if (investmentAmount !== investmentPlan.amount) {
-
-      return res.status(400).json({
-
-        success: false,
-
         message:
-          `This plan requires an investment of GH₵${investmentPlan.amount}.`
+          `Insufficient balance. You need GH₵${investmentAmount.toLocaleString()} to choose this plan, but your available balance is GH₵${availableBalance.toLocaleString()}.`
 
       });
 
@@ -93,35 +142,41 @@ router.post("/", auth, async (req, res) => {
 
 
     // ==================================================
-    // 2.22% DAILY SIMPLE INTEREST
+    // DAILY RATE
     // ==================================================
 
     const DAILY_RATE = 2.22;
+
 
     const dailyEarning =
       (investmentAmount * DAILY_RATE) / 100;
 
 
     // ==================================================
-    // 365-DAY INVESTMENT
+    // INVESTMENT PERIOD
     // ==================================================
 
     const startDate = new Date();
 
-    const endDate = new Date(startDate);
+    const endDate =
+      new Date(startDate);
 
     endDate.setDate(
       endDate.getDate() + 365
     );
 
 
-    // Total interest over 365 days
+    // ==================================================
+    // TOTAL INTEREST
+    // ==================================================
 
     const totalInterest =
       dailyEarning * 365;
 
 
-    // Original investment + interest
+    // ==================================================
+    // TOTAL RETURN
+    // ==================================================
 
     const totalReturn =
       investmentAmount + totalInterest;
@@ -131,47 +186,71 @@ router.post("/", auth, async (req, res) => {
     // CREATE INVESTMENT
     // ==================================================
 
-    const investment = await Investment.create({
+    const investment =
+      await Investment.create({
 
-      user: req.user.id,
+        user: req.user.id,
 
-      plan: investmentPlan._id,
+        plan: investmentPlan._id,
 
-      amount: investmentAmount,
+        amount: investmentAmount,
 
-      dailyEarning,
+        dailyEarning,
 
-      totalReturn,
+        totalReturn,
 
-      status: "Active",
+        status: "Active",
 
-      startDate,
+        startDate,
 
-      endDate
+        endDate
 
-    });
+      });
 
+
+    // ==================================================
+    // RESPONSE
+    // ==================================================
 
     res.status(201).json({
 
       success: true,
 
-      message: "Investment created successfully.",
+      message:
+        "Investment created successfully.",
 
-      investment
+      investment,
+
+      balance: {
+
+        previous:
+          availableBalance,
+
+        invested:
+          investmentAmount,
+
+        remaining:
+          availableBalance - investmentAmount
+
+      }
 
     });
 
 
   } catch (error) {
 
-    console.error("Create investment error:", error);
+    console.error(
+      "Create investment error:",
+      error
+    );
+
 
     res.status(500).json({
 
       success: false,
 
-      message: error.message
+      message:
+        error.message
 
     });
 
@@ -199,7 +278,9 @@ router.get("/", auth, async (req, res) => {
         "name amount duration returnPercentage totalReturn active"
       )
       .sort({
+
         createdAt: -1
+
       });
 
 
@@ -214,13 +295,18 @@ router.get("/", auth, async (req, res) => {
 
   } catch (error) {
 
-    console.error("Get investments error:", error);
+    console.error(
+      "Get investments error:",
+      error
+    );
+
 
     res.status(500).json({
 
       success: false,
 
-      message: error.message
+      message:
+        error.message
 
     });
 

@@ -3,24 +3,33 @@ const InvestmentPlan = require("../models/InvestmentPlan");
 
 const router = express.Router();
 
+
 // ==========================================
 // GET ALL ACTIVE INVESTMENT PLANS
 // ==========================================
 
 router.get("/", async (req, res) => {
   try {
-    const plans = await InvestmentPlan.find({ active: true });
 
-    res.json({
+    const plans = await InvestmentPlan.find({
+      active: true
+    }).sort({
+      amount: 1
+    });
+
+    return res.status(200).json({
       success: true,
-      plans,
+      plans
     });
 
   } catch (error) {
 
-    res.status(500).json({
+    console.error("Get investment plans error:", error);
+
+    return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Unable to load investment plans.",
+      error: error.message
     });
 
   }
@@ -38,45 +47,62 @@ router.post("/", async (req, res) => {
       name,
       amount,
       duration,
-      returnPercentage,
-      totalReturn,
+      totalReturn
     } = req.body;
+
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Plan name is required."
+      });
+    }
+
+
+    if (!Number.isFinite(Number(amount))) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid plan amount is required."
+      });
+    }
 
 
     const plan = await InvestmentPlan.create({
 
-      name,
+      name: name.trim(),
 
-      amount,
+      amount: Number(amount),
 
-      duration,
+      duration: duration || "1 Year",
 
-      // PEPCOKE daily rate
       returnPercentage: 2.22,
 
-      totalReturn,
+      totalReturn: Number(totalReturn) || 0,
+
+      active: true
 
     });
 
 
-    res.status(201).json({
+    return res.status(201).json({
 
       success: true,
 
-      message: "Investment plan created successfully",
+      message: "Investment plan created successfully.",
 
-      plan,
+      plan
 
     });
 
-
   } catch (error) {
 
-    res.status(500).json({
+    console.error("Create investment plan error:", error);
+
+    return res.status(500).json({
 
       success: false,
 
-      message: error.message,
+      message: error.message
 
     });
 
@@ -97,13 +123,13 @@ router.put("/update-rate", async (req, res) => {
         {},
         {
           $set: {
-            returnPercentage: 2.22,
-          },
+            returnPercentage: 2.22
+          }
         }
       );
 
 
-    res.json({
+    return res.json({
 
       success: true,
 
@@ -111,18 +137,22 @@ router.put("/update-rate", async (req, res) => {
         "All investment plans updated to 2.22% daily rate.",
 
       modifiedCount:
-        result.modifiedCount,
+        result.modifiedCount
 
     });
 
-
   } catch (error) {
 
-    res.status(500).json({
+    console.error(
+      "Update plan rate error:",
+      error
+    );
+
+    return res.status(500).json({
 
       success: false,
 
-      message: error.message,
+      message: error.message
 
     });
 

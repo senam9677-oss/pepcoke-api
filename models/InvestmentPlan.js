@@ -5,38 +5,44 @@ const investmentPlanSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
+      trim: true
     },
 
     amount: {
       type: Number,
       required: true,
+      min: 100
     },
 
     duration: {
       type: String,
       required: true,
+      default: "1 Year"
     },
 
     returnPercentage: {
       type: Number,
-      required: true,
+      default: 2.22
     },
 
     totalReturn: {
       type: Number,
-      required: true,
+      default: 0
     },
 
     active: {
       type: Boolean,
-      default: true,
-    },
+      default: true
+    }
   },
   {
-    timestamps: true,
+    timestamps: true
   }
 );
 
 module.exports =
   mongoose.models.InvestmentPlan ||
-  mongoose.model("InvestmentPlan", investmentPlanSchema);
+  mongoose.model(
+    "InvestmentPlan",
+    investmentPlanSchema
+  );

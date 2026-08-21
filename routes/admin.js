@@ -288,37 +288,36 @@ router.put(
     try {
 
       const deposit =
-        await Deposit.findById(req.params.id);
+  await Deposit.findById(req.params.id);
 
+if (!deposit) {
 
-      if us(404).json({
+  return res.status(404).json({
 
-          success: false,
+    success: false,
 
-          message: "Deposit not found."
+    message: "Deposit not found."
 
-        });
+  });
 
-      }
+}
 
+if (deposit.status !== "Pending") {
 
-      if (deposit.status !== "Pending") {
+  return res.status(400).json({
 
-        return res.status(400).json({
+    success: false,
 
-          success: false,
+    message:
+      `This deposit is already ${deposit.status}.`
 
-          message:
-            `This deposit is already ${deposit.status}.`
+  });
 
-        });
+}
 
-      }
+deposit.status = "Rejected";
 
-
-      deposit.status = "Rejected";
-
-      await deposit.save();
+await deposit.save();
 
 
       await Notification.create({

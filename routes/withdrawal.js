@@ -1,51 +1,145 @@
 const express = require("express");
 const auth = require("../middleware/auth");
+const Withdrawal = require("../models/Withdrawal");
 
 const router = express.Router();
 
-const Withdrawal = require("../models/Withdrawal");
 
+// ==========================================
+// CREATE WITHDRAWAL REQUEST
+// ==========================================
 
-// Create Withdrawal Request
 router.post("/", auth, async (req, res) => {
 
   try {
 
     const {
-
       amount,
-
       paymentMethod,
-
       accountNumber,
-
       accountName
-
     } = req.body;
 
 
-    const withdrawal = await Withdrawal.create({
+    // ======================================
+    // VALIDATE AMOUNT
+    // ======================================
 
-      user: req.user.id,
-
-      amount,
-
-      paymentMethod,
-
-      accountNumber,
-
-      accountName,
-
-      status: "pending"
-
-    });
+    const withdrawalAmount =
+      Number(amount);
 
 
-    res.status(201).json({
+    if (
+      !Number.isFinite(withdrawalAmount) ||
+      withdrawalAmount < 50
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Minimum withdrawal amount is GH₵50."
+
+      });
+
+    }
+
+
+    // ======================================
+    // VALIDATE PAYMENT METHOD
+    // ======================================
+
+    if (
+      !paymentMethod ||
+      !paymentMethod.trim()
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Withdrawal method is required."
+
+      });
+
+    }
+
+
+    // ======================================
+    // VALIDATE ACCOUNT NUMBER
+    // ======================================
+
+    if (
+      !accountNumber ||
+      !String(accountNumber).trim()
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Account or mobile money number is required."
+
+      });
+
+    }
+
+
+    // ======================================
+    // VALIDATE ACCOUNT NAME
+    // ======================================
+
+    if (
+      !accountName ||
+      !accountName.trim()
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Account name is required."
+
+      });
+
+    }
+
+
+    // ======================================
+    // CREATE WITHDRAWAL
+    // ======================================
+
+    const withdrawal =
+      await Withdrawal.create({
+
+        user: req.user.id,
+
+        amount: withdrawalAmount,
+
+        paymentMethod:
+          paymentMethod.trim(),
+
+        accountNumber:
+          String(accountNumber).trim(),
+
+        accountName:
+          accountName.trim(),
+
+        status: "Pending"
+
+      });
+
+
+    return res.status(201).json({
 
       success: true,
 
-      message: "Withdrawal request submitted successfully",
+      message:
+        "Withdrawal request submitted successfully",
 
       withdrawal
 
@@ -54,11 +148,18 @@ router.post("/", auth, async (req, res) => {
 
   } catch (error) {
 
-    res.status(500).json({
+    console.error(
+      "Create withdrawal error:",
+      error
+    );
+
+
+    return res.status(500).json({
 
       success: false,
 
-      message: error.message
+      message:
+        error.message
 
     });
 
@@ -67,23 +168,28 @@ router.post("/", auth, async (req, res) => {
 });
 
 
-// Get Logged-in User Withdrawals
+// ==========================================
+// GET LOGGED-IN USER WITHDRAWALS
+// ==========================================
+
 router.get("/", auth, async (req, res) => {
 
   try {
 
-    const withdrawals = await Withdrawal.find({
+    const withdrawals =
+      await Withdrawal.find({
 
-      user: req.user.id
+        user: req.user.id
 
-    }).sort({
+      })
+      .sort({
 
-      createdAt: -1
+        createdAt: -1
 
-    });
+      });
 
 
-    res.json({
+    return res.json({
 
       success: true,
 
@@ -91,13 +197,21 @@ router.get("/", auth, async (req, res) => {
 
     });
 
+
   } catch (error) {
 
-    res.status(500).json({
+    console.error(
+      "Get withdrawals error:",
+      error
+    );
+
+
+    return res.status(500).json({
 
       success: false,
 
-      message: error.message
+      message:
+        error.message
 
     });
 

@@ -8,12 +8,14 @@ const auth = require("../middleware/auth");
 const router = express.Router();
 
 
-// ======================================================
+// ==========================================
 // REGISTER
-// ======================================================
+// ==========================================
 
 router.post("/register", async (req, res) => {
+
   try {
+
     const {
       name,
       email,
@@ -22,56 +24,107 @@ router.post("/register", async (req, res) => {
       referredBy
     } = req.body;
 
+
+    // Validate required fields
+
     if (!name || !email || !password) {
+
       return res.status(400).json({
+
         success: false,
-        message: "Name, email and password are required."
+
+        message:
+          "Name, email and password are required."
+
       });
+
     }
 
-    const cleanEmail = email.toLowerCase().trim();
 
-    const existingUser = await User.findOne({
-      email: cleanEmail
-    });
+    // Check if email already exists
+
+    const existingUser =
+      await User.findOne({
+
+        email:
+          email.toLowerCase().trim()
+
+      });
+
 
     if (existingUser) {
+
       return res.status(400).json({
+
         success: false,
-        message: "Email already exists."
+
+        message:
+          "Email already exists."
+
       });
+
     }
 
-    // Validate referral code if provided
+
+    // Check referral code if one was provided
+
     let validReferredBy = "";
 
-    if (referredBy && referredBy.trim()) {
-      const referralCodeInput =
-        referredBy.trim().toUpperCase();
 
-      const referrer = await User.findOne({
-        referralCode: referralCodeInput
-      });
+    if (
+      referredBy &&
+      referredBy.trim()
+    ) {
+
+      const referrer =
+        await User.findOne({
+
+          referralCode:
+            referredBy
+              .trim()
+              .toUpperCase()
+
+        });
+
 
       if (!referrer) {
+
         return res.status(400).json({
+
           success: false,
-          message: "Invalid referral code."
+
+          message:
+            "Invalid referral code."
+
         });
+
       }
 
-      validReferredBy = referrer.referralCode;
+
+      validReferredBy =
+        referrer.referralCode;
+
     }
 
+
     // Hash password
+
     const hashedPassword =
-      await bcrypt.hash(password, 10);
+      await bcrypt.hash(
+        password,
+        10
+      );
+
 
     // Generate unique referral code
-    let referralCode = "";
+
+    let referralCode;
+
     let codeExists = true;
 
+
     while (codeExists) {
+
       referralCode =
         "PEP" +
         Math.random()
@@ -79,202 +132,415 @@ router.post("/register", async (req, res) => {
           .substring(2, 8)
           .toUpperCase();
 
+
       const existingCode =
         await User.findOne({
+
           referralCode
+
         });
 
-      codeExists = !!existingCode;
+
+      if (!existingCode) {
+
+        codeExists = false;
+
+      }
+
     }
 
+
     // Create user
-    const user = await User.create({
-      name: name.trim(),
-      email: cleanEmail,
-      phone: phone ? phone.trim() : "",
-      password: hashedPassword,
-      balance: 0,
-      referralCode,
-      referredBy: validReferredBy,
-      role: "user",
-      status: "Active"
-    });
+
+    const user =
+      await User.create({
+
+        name:
+          name.trim(),
+
+        email:
+          email
+            .toLowerCase()
+            .trim(),
+
+        phone:
+          phone
+            ? phone.trim()
+            : "",
+
+        password:
+          hashedPassword,
+
+        balance:
+          0,
+
+        referralCode,
+
+        referredBy:
+          validReferredBy,
+
+        role:
+          "user",
+
+        status:
+          "Active"
+
+      });
+
 
     return res.status(201).json({
+
       success: true,
-      message: "Registration successful.",
+
+      message:
+        "Registration successful.",
+
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        balance: user.balance,
-        referralCode: user.referralCode,
-        referredBy: user.referredBy,
-        role: user.role,
-        status: user.status
+
+        id:
+          user._id,
+
+        name:
+          user.name,
+
+        email:
+          user.email,
+
+        phone:
+          user.phone,
+
+        balance:
+          user.balance,
+
+        referralCode:
+          user.referralCode,
+
+        referredBy:
+          user.referredBy,
+
+        role:
+          user.role,
+
+        status:
+          user.status
+
       }
+
     });
 
+
   } catch (error) {
+
     console.error(
       "Registration error:",
       error
     );
 
+
     return res.status(500).json({
+
       success: false,
-      message: error.message || "Unable to register user."
+
+      message:
+        error.message
+
     });
+
   }
+
 });
 
 
-// ======================================================
+// ==========================================
 // LOGIN
-// ======================================================
+// ==========================================
 
 router.post("/login", async (req, res) => {
+
   try {
+
     const {
       email,
       password
     } = req.body;
 
+
+    // Validate
+
     if (!email || !password) {
+
       return res.status(400).json({
+
         success: false,
-        message: "Email and password are required."
+
+        message:
+          "Email and password are required."
+
       });
+
     }
 
-    const user = await User.findOne({
-      email: email.toLowerCase().trim()
-    });
+
+    // Find user
+
+    const user =
+      await User.findOne({
+
+        email:
+          email
+            .toLowerCase()
+            .trim()
+
+      });
+
 
     if (!user) {
+
       return res.status(400).json({
+
         success: false,
-        message: "Invalid email or password."
+
+        message:
+          "Invalid email or password."
+
       });
+
     }
+
+
+    // Check password
 
     const validPassword =
       await bcrypt.compare(
+
         password,
+
         user.password
+
       );
+
 
     if (!validPassword) {
+
       return res.status(400).json({
-        success: false,
-        message: "Invalid email or password."
-      });
-    }
 
-    if (user.status === "Suspended") {
-      return res.status(403).json({
         success: false,
+
         message:
-          "Your account has been suspended. Please contact PEPCOKE support."
+          "Invalid email or password."
+
       });
+
     }
 
-    if (!process.env.JWT_SECRET) {
-      throw new Error(
-        "JWT_SECRET is not configured."
+
+    // Check account status
+
+    if (
+      user.status ===
+      "Suspended"
+    ) {
+
+      return res.status(403).json({
+
+        success: false,
+
+        message:
+          "Your account has been suspended."
+
+      });
+
+    }
+
+
+    // Create token
+
+    const token =
+      jwt.sign(
+
+        {
+
+          id:
+            user._id.toString(),
+
+          role:
+            user.role
+
+        },
+
+        process.env.JWT_SECRET,
+
+        {
+
+          expiresIn:
+            "7d"
+
+        }
+
       );
-    }
 
-    const token = jwt.sign(
-      {
-        id: user._id.toString(),
-        role: user.role
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d"
-      }
-    );
 
     return res.json({
+
       success: true,
-      message: "Login successful.",
+
+      message:
+        "Login successful.",
+
       token,
+
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        balance: user.balance,
-        referralCode: user.referralCode,
-        referredBy: user.referredBy,
-        role: user.role,
-        status: user.status
+
+        id:
+          user._id,
+
+        name:
+          user.name,
+
+        email:
+          user.email,
+
+        phone:
+          user.phone,
+
+        balance:
+          user.balance,
+
+        referralCode:
+          user.referralCode,
+
+        referredBy:
+          user.referredBy,
+
+        role:
+          user.role,
+
+        status:
+          user.status
+
       }
+
     });
 
+
   } catch (error) {
+
     console.error(
       "Login error:",
       error
     );
 
+
     return res.status(500).json({
+
       success: false,
-      message: error.message || "Unable to login."
+
+      message:
+        error.message
+
     });
+
   }
+
 });
 
 
-// ======================================================
-// GET LOGGED-IN USER REFERRAL DATA
-// ======================================================
+// ==========================================
+// GET REFERRAL INFORMATION
+// Works with referrals.html / referrals.js
+// ==========================================
 
-router.get("/referrals", auth, async (req, res) => {
-  try {
-    const user = await User.findById(
-      req.user.id
-    );
+router.get(
+  "/referrals",
+  auth,
+  async (req, res) => {
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found."
+    try {
+
+      const user =
+        await User.findById(
+          req.user.id
+        );
+
+
+      if (!user) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            "User not found."
+
+        });
+
+      }
+
+
+      // Find everybody who registered
+      // using this user's referral code
+
+      const referrals =
+        await User.find({
+
+          referredBy:
+            user.referralCode
+
+        })
+        .select(
+          "name email createdAt"
+        )
+        .sort({
+
+          createdAt:
+            -1
+
+        });
+
+
+      return res.json({
+
+        success: true,
+
+        referralCode:
+          user.referralCode,
+
+        totalReferrals:
+          referrals.length,
+
+        totalCommission:
+          0,
+
+        referrals
+
       });
+
+
+    } catch (error) {
+
+      console.error(
+        "Referral error:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          error.message
+
+      });
+
     }
 
-    const referrals = await User.find({
-      referredBy: user.referralCode
-    })
-      .select("name email createdAt")
-      .sort({
-        createdAt: -1
-      });
-
-    return res.json({
-      success: true,
-      referralCode: user.referralCode,
-      totalReferrals: referrals.length,
-      totalCommission: 0,
-      referrals
-    });
-
-  } catch (error) {
-    console.error(
-      "Referral data error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        error.message ||
-        "Unable to load referral data."
-    });
   }
-});
+);
 
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 module.exports = router;

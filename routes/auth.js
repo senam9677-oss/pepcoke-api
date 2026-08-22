@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
+const auth = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -39,11 +40,37 @@ router.post("/register", async (req, res) => {
       email: email.toLowerCase().trim()
     });
 
+
     if (existingUser) {
       return res.status(400).json({
         success: false,
         message: "Email already exists."
       });
+    }
+
+
+    // Check whether the referral code is valid
+
+    let validReferredBy = "";
+
+    if (referredBy && referredBy.trim()) {
+
+      const referrer = await User.findOne({
+        referralCode: referredBy.trim().toUpperCase()
+      });
+
+
+      if (!referrer) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid referral code."
+        });
+      }
+
+
+      validReferredBy =
+        referrer.referralCode;
+
     }
 
 
@@ -53,14 +80,31 @@ router.post("/register", async (req, res) => {
       await bcrypt.hash(password, 10);
 
 
-    // Generate referral code
+    // Generate a unique referral code
 
-    const referralCode =
-      "PEP" +
-      Math.random()
-        .toString(36)
-        .substring(2, 8)
-        .toUpperCase();
+    let referralCode;
+    let codeExists = true;
+
+
+    while (codeExists) {
+
+      referralCode =
+        "PEP" +
+        Math.random()
+          .toString(36)
+          .substring(2, 8)
+          .toUpperCase();
+
+
+      const existingCode =
+        await User.findOne({
+          referralCode
+        });
+
+
+      codeExists = !!existingCode;
+
+    }
 
 
     // Create user
@@ -71,17 +115,13 @@ router.post("/register", async (req, res) => {
 
       email: email.toLowerCase().trim(),
 
-      phone: phone || "",
+      phone: phone ? phone.trim() : "",
 
       password: hashedPassword,
 
-      referredBy: referredBy || "",
+      referredBy: validReferredBy,
 
       referralCode,
-
-      // IMPORTANT:
-      // Every normal registration is a user.
-      // A user cannot register themselves as admin.
 
       role: "user",
 
@@ -90,7 +130,7 @@ router.post("/register", async (req, res) => {
     });
 
 
-    res.status(201).json({
+    return res.status(201).json({
 
       success: true,
 
@@ -108,6 +148,8 @@ router.post("/register", async (req, res) => {
 
         referralCode: user.referralCode,
 
+        referredBy: user.referredBy,
+
         role: user.role
 
       }
@@ -117,17 +159,23 @@ router.post("/register", async (req, res) => {
 
   } catch (error) {
 
-    console.error("Registration error:", error);
+    console.error(
+      "Registration error:",
+      error
+    );
 
-    res.status(500).json({
+
+    return res.status(500).json({
 
       success: false,
 
-      message: error.message
+      message:
+        "Unable to register user."
 
     });
 
   }
+
 });
 
 
@@ -153,7 +201,8 @@ router.post("/login", async (req, res) => {
 
         success: false,
 
-        message: "Email and password are required."
+        message:
+          "Email and password are required."
 
       });
 
@@ -164,7 +213,8 @@ router.post("/login", async (req, res) => {
 
     const user = await User.findOne({
 
-      email: email.toLowerCase().trim()
+      email:
+        email.toLowerCase().trim()
 
     });
 
@@ -175,7 +225,8 @@ router.post("/login", async (req, res) => {
 
         success: false,
 
-        message: "Invalid email or password."
+        message:
+          "Invalid email or password."
 
       });
 
@@ -197,7 +248,8 @@ router.post("/login", async (req, res) => {
 
         success: false,
 
-        message: "Invalid email or password."
+        message:
+          "Invalid email or password."
 
       });
 
@@ -220,12 +272,23 @@ router.post("/login", async (req, res) => {
     }
 
 
+    // Check JWT secret
+
+    if (!process.env.JWT_SECRET) {
+
+      throw new Error(
+        "JWT_SECRET is not configured."
+      );
+
+    }
+
+
     // Create JWT
 
     const token = jwt.sign(
 
       {
-        id: user._id,
+        id: user._id.toString(),
         role: user.role
       },
 
@@ -240,11 +303,12 @@ router.post("/login", async (req, res) => {
 
     // Send response
 
-    res.json({
+    return res.json({
 
       success: true,
 
-      message: "Login successful.",
+      message:
+        "Login successful.",
 
       token,
 
@@ -260,9 +324,11 @@ router.post("/login", async (req, res) => {
 
         balance: user.balance,
 
-        referralCode: user.referralCode,
+        referralCode:
+          user.referralCode,
 
-        referredBy: user.referredBy,
+        referredBy:
+          user.referredBy,
 
         role: user.role,
 
@@ -275,13 +341,18 @@ router.post("/login", async (req, res) => {
 
   } catch (error) {
 
-    console.error("Login error:", error);
+    console.error(
+      "Login error:",
+      error
+    );
 
-    res.status(500).json({
+
+    return res.status(500).json({
 
       success: false,
 
-      message: error.message
+      message:
+        "Unable to login."
 
     });
 
@@ -290,5 +361,51 @@ router.post("/login", async (req, res) => {
 });
 
 
+// ======================================================
+// GET LOGGED-IN USER REFERRAL DATA
+// ======================================================
 
-module.exports = router;
+router.get("/referrals", auth, async (req, res) => {
+
+  try {
+
+    const user =
+      await User.findById(
+        req.user.id
+      );
+
+
+    if (!user) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message:
+          "User not found."
+
+      });
+
+    }
+
+
+    // Find users referred by this user
+
+    const referrals =
+      await User.find({
+
+        referredBy:
+          user.referralCode
+
+      })
+      .select(
+        "name email createdAt"
+      )
+      .sort({
+
+        createdAt: -1
+
+      });
+
+
+    return

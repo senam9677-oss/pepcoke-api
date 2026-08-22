@@ -11,27 +11,31 @@ const withdrawalSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
+      min: 50,
     },
 
     paymentMethod: {
       type: String,
       required: true,
+      trim: true,
     },
 
     accountNumber: {
       type: String,
       required: true,
+      trim: true,
     },
 
     accountName: {
       type: String,
       required: true,
+      trim: true,
     },
 
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
     },
   },
   {

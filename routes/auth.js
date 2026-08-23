@@ -540,6 +540,102 @@ router.get(
 
 
 // ==========================================
+// GET LOGGED-IN USER PROFILE
+// Works with profile.html / profile.js
+// ==========================================
+
+router.get(
+  "/profile",
+  auth,
+  async (req, res) => {
+
+    try {
+
+      const user =
+        await User.findById(
+          req.user.id
+        ).select("-password");
+
+
+      if (!user) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            "User not found."
+
+        });
+
+      }
+
+
+      return res.json({
+
+        success: true,
+
+        user: {
+
+          id:
+            user._id,
+
+          name:
+            user.name,
+
+          email:
+            user.email,
+
+          phone:
+            user.phone,
+
+          balance:
+            user.balance || 0,
+
+          referralCode:
+            user.referralCode,
+
+          referredBy:
+            user.referredBy,
+
+          role:
+            user.role,
+
+          status:
+            user.status,
+
+          createdAt:
+            user.createdAt
+
+        }
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "Profile error:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  }
+);
+
+
+// ==========================================
 // EXPORT
 // ==========================================
 

@@ -12,12 +12,10 @@ router.get("/", async (req, res) => {
 
   try {
 
-    const plans = await InvestmentPlan
-      .find({})
-      .sort({
-        amount: 1,
-        minimumAmount: 1
-      });
+    const plans = await InvestmentPlan.find({})
+  .sort({
+    amount: 1
+  });
 
 
     return res.status(200).json({

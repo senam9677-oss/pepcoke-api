@@ -39,14 +39,189 @@ router.get("/", auth, async (req, res) => {
 
 
     // ========================================
-    // GET INVESTMENTS
+    // GET ACTIVE AND COMPLETED INVESTMENTS
     // ========================================
 
     const investments = await Investment.find({
 
       user: req.user.id
 
-    }).populate("plan");
+    })
+      .populate("plan")
+      .sort({
+
+        createdAt: -1
+
+      });
+
+
+    // ========================================
+    // AUTOMATIC DAILY EARNINGS
+    // ========================================
+
+    const now = new Date();
+
+
+    for (const investment of investments) {
+
+      // Only process active investments
+
+      if (investment.status !== "Active") {
+
+        continue;
+
+      }
+
+
+      // Get the last date earnings were paid
+
+      const lastEarningDate =
+        new Date(
+          investment.lastEarningDate ||
+          investment.startDate
+        );
+
+
+      // Calculate time passed
+
+      const timeDifference =
+        now.getTime() -
+        lastEarningDate.getTime();
+
+
+      // Number of FULL 24-hour periods passed
+
+      let daysPassed =
+        Math.floor(
+          timeDifference /
+          (1000 * 60 * 60 * 24)
+        );
+
+
+      // No full day has passed yet
+
+      if (daysPassed <= 0) {
+
+        continue;
+
+      }
+
+
+      // ======================================
+      // CHECK REMAINING DAYS
+      // ======================================
+
+      const earnedDays =
+        Number(
+          investment.earnedDays || 0
+        );
+
+
+      const remainingDays =
+        365 - earnedDays;
+
+
+      // Investment has already completed
+
+      if (remainingDays <= 0) {
+
+        investment.status =
+          "Completed";
+
+        await investment.save();
+
+        continue;
+
+      }
+
+
+      // Do not pay more than the remaining days
+
+      if (daysPassed > remainingDays) {
+
+        daysPassed =
+          remainingDays;
+
+      }
+
+
+      // ======================================
+      // CALCULATE EARNINGS
+      // ======================================
+
+      const dailyEarning =
+        Number(
+          investment.dailyEarning || 0
+        );
+
+
+      const earningsToAdd =
+        dailyEarning *
+        daysPassed;
+
+
+      // ======================================
+      // ADD EARNINGS TO USER BALANCE
+      // ======================================
+
+      user.balance =
+        Number(user.balance || 0) +
+        earningsToAdd;
+
+
+      // ======================================
+      // UPDATE INVESTMENT EARNINGS
+      // ======================================
+
+      investment.totalEarned =
+        Number(
+          investment.totalEarned || 0
+        ) +
+        earningsToAdd;
+
+
+      investment.earnedDays =
+        earnedDays +
+        daysPassed;
+
+
+      // Move last earning date forward
+      // by the exact number of paid days
+
+      const newLastEarningDate =
+        new Date(lastEarningDate);
+
+
+      newLastEarningDate.setDate(
+        newLastEarningDate.getDate() +
+        daysPassed
+      );
+
+
+      investment.lastEarningDate =
+        newLastEarningDate;
+
+
+      // ======================================
+      // COMPLETE INVESTMENT IF 365 DAYS
+      // ======================================
+
+      if (investment.earnedDays >= 365) {
+
+        investment.status =
+          "Completed";
+
+      }
+
+
+      await investment.save();
+
+    }
+
+
+    // Save the user's updated balance
+
+    await user.save();
 
 
     // ========================================
@@ -102,7 +277,10 @@ router.get("/", auth, async (req, res) => {
         )
         .reduce(
           (total, deposit) =>
-            total + Number(deposit.amount || 0),
+            total +
+            Number(
+              deposit.amount || 0
+            ),
           0
         );
 
@@ -119,7 +297,10 @@ router.get("/", auth, async (req, res) => {
         )
         .reduce(
           (total, withdrawal) =>
-            total + Number(withdrawal.amount || 0),
+            total +
+            Number(
+              withdrawal.amount || 0
+            ),
           0
         );
 
@@ -127,26 +308,20 @@ router.get("/", auth, async (req, res) => {
     // ========================================
     // TOTAL EARNINGS
     // ========================================
-    //
-    // At this stage, earnings are calculated
-    // from the daily earnings recorded on
-    // active investments.
-    //
-    // We will build the automatic daily
-    // earnings system separately.
-    //
 
     const totalEarnings =
       investments.reduce(
         (total, investment) =>
           total +
-          Number(investment.dailyEarning || 0),
+          Number(
+            investment.totalEarned || 0
+          ),
         0
       );
 
 
     // ========================================
-    // RECENT TRANSACTIONS
+    // DEPOSIT TRANSACTIONS
     // ========================================
 
     const depositTransactions =
@@ -154,97 +329,85 @@ router.get("/", auth, async (req, res) => {
 
         type: "Deposit",
 
-        amount: deposit.amount,
+        amount:
+          Number(
+            deposit.amount || 0
+          ),
 
-        status: deposit.status,
+        status:
+          deposit.status,
 
-        date: deposit.createdAt
+        date:
+          deposit.createdAt
 
       }));
 
+
+    // ========================================
+    // WITHDRAWAL TRANSACTIONS
+    // ========================================
 
     const withdrawalTransactions =
       withdrawals.map(withdrawal => ({
 
         type: "Withdrawal",
 
-        amount: withdrawal.amount,
+        amount:
+          Number(
+            withdrawal.amount || 0
+          ),
 
-        status: withdrawal.status,
+        status:
+          withdrawal.status,
 
-        date: withdrawal.createdAt
+        date:
+          withdrawal.createdAt
 
       }));
 
 
-    const transactions = [
-      ...depositTransactions,
-      ...withdrawalTransactions
-    ]
-      .sort(
-        (a, b) =>
-          new Date(b.date) -
-          new Date(a.date)
-      )
-      .slice(0, 5);
+    // ========================================
+    // INVESTMENT TRANSACTIONS
+    // ========================================
+
+    const investmentTransactions =
+      investments.map(investment => ({
+
+        type: "Investment",
+
+        amount:
+          Number(
+            investment.amount || 0
+          ),
+
+        status:
+          investment.status,
+
+        date:
+          investment.startDate
+
+      }));
 
 
     // ========================================
-    // SEND DASHBOARD DATA
+    // DAILY EARNING TRANSACTIONS
     // ========================================
 
-    res.json({
-
-      success: true,
-
-      user: {
-
-        id: user._id,
-
-        name: user.name,
-
-        email: user.email,
-
-        phone: user.phone
-
-      },
-
-      balance: user.balance || 0,
-
-      activeInvestments,
-
-      totalEarnings,
-
-      totalDeposits,
-
-      totalWithdrawals,
-
-      transactions,
-
+    const earningTransactions =
       investments
+        .filter(
+          investment =>
+            Number(
+              investment.totalEarned || 0
+            ) > 0
+        )
+        .map(investment => ({
 
-    });
+          type: "Investment Earnings",
 
+          amount:
+            Number(
+              investment.totalEarned || 0
+            ),
 
-  } catch (error) {
-
-    console.error(
-      "Dashboard error:",
-      error
-    );
-
-
-    res.status(500).json({
-
-      success: false,
-
-      message: error.message
-
-    });
-
-  }
-
-});
-
-
-module.exports = router;
+         

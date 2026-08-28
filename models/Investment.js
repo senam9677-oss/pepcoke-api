@@ -29,6 +29,11 @@ const investmentSchema = new mongoose.Schema(
       required: true,
     },
 
+    totalEarned: {
+      type: Number,
+      default: 0,
+    },
+
     status: {
       type: String,
       enum: ["Active", "Completed"],
@@ -40,15 +45,19 @@ const investmentSchema = new mongoose.Schema(
       default: Date.now,
     },
 
+    lastEarningDate: {
+      type: Date,
+      default: Date.now,
+    },
+
     endDate: {
       type: Date,
-    }
+    },
   },
   {
     timestamps: true,
   }
 );
-
 
 module.exports =
   mongoose.models.Investment ||

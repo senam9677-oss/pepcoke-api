@@ -16,7 +16,6 @@ router.post("/", auth, async (req, res) => {
 
   try {
 
-    // Only the plan ID is needed
     const { plan } = req.body;
 
 
@@ -127,16 +126,7 @@ router.post("/", auth, async (req, res) => {
         success: false,
 
         message:
-          `Insufficient balance. You need GH₵${needed.toFixed(2)} more.`,
-
-        balance:
-          currentBalance,
-
-        planAmount:
-          investmentAmount,
-
-        additionalAmountNeeded:
-          needed
+          `Insufficient balance. You need GH₵${needed.toFixed(2)} more.`
 
       });
 
@@ -147,11 +137,20 @@ router.post("/", auth, async (req, res) => {
     // DAILY EARNING
     // ==================================================
 
-    const DAILY_RATE = 2.22;
+    // Get the rate from the selected plan.
+    // Falls back to 2.22 if no rate exists.
+
+    const dailyRate =
+      Number(investmentPlan.returnPercentage) || 2.22;
 
 
     const dailyEarning =
-      (investmentAmount * DAILY_RATE) / 100;
+      Number(
+        (
+          investmentAmount *
+          dailyRate / 100
+        ).toFixed(2)
+      );
 
 
     // ==================================================
@@ -160,6 +159,10 @@ router.post("/", auth, async (req, res) => {
 
     const startDate =
       new Date();
+
+
+    const lastEarningDate =
+      new Date(startDate);
 
 
     const endDate =
@@ -180,7 +183,12 @@ router.post("/", auth, async (req, res) => {
 
 
     const totalReturn =
-      investmentAmount + totalInterest;
+      Number(
+        (
+          investmentAmount +
+          totalInterest
+        ).toFixed(2)
+      );
 
 
     // ==================================================
@@ -188,7 +196,12 @@ router.post("/", auth, async (req, res) => {
     // ==================================================
 
     user.balance =
-      currentBalance - investmentAmount;
+      Number(
+        (
+          currentBalance -
+          investmentAmount
+        ).toFixed(2)
+      );
 
 
     await user.save();
@@ -211,9 +224,13 @@ router.post("/", auth, async (req, res) => {
 
         totalReturn,
 
+        totalEarned: 0,
+
         status: "Active",
 
         startDate,
+
+        lastEarningDate,
 
         endDate
 
@@ -224,7 +241,7 @@ router.post("/", auth, async (req, res) => {
     // SUCCESS
     // ==================================================
 
-    res.status(201).json({
+    return res.status(201).json({
 
       success: true,
 
@@ -247,7 +264,7 @@ router.post("/", auth, async (req, res) => {
     );
 
 
-    res.status(500).json({
+    return res.status(500).json({
 
       success: false,
 
@@ -277,7 +294,7 @@ router.get("/", auth, async (req, res) => {
       })
       .populate(
         "plan",
-        "name amount duration returnPercentage totalReturn active"
+        "name amount duration returnPercentage active"
       )
       .sort({
 
@@ -286,7 +303,7 @@ router.get("/", auth, async (req, res) => {
       });
 
 
-    res.json({
+    return res.json({
 
       success: true,
 
@@ -303,7 +320,7 @@ router.get("/", auth, async (req, res) => {
     );
 
 
-    res.status(500).json({
+    return res.status(500).json({
 
       success: false,
 

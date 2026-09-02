@@ -1,25 +1,22 @@
 const express = require("express");
 const auth = require("../middleware/auth");
-
 const Deposit = require("../models/Deposit");
 
 const router = express.Router();
-
 
 // ==========================================
 // CREATE DEPOSIT
 // ==========================================
 
 router.post("/", auth, async (req, res) => {
-
   try {
-
     const {
       amount,
       paymentMethod,
-      transactionId
+      transactionId,
+      senderName,
+      senderPhone
     } = req.body;
-
 
     // ========================================
     // VALIDATE AMOUNT
@@ -31,181 +28,134 @@ router.post("/", auth, async (req, res) => {
       !Number.isFinite(depositAmount) ||
       depositAmount < 100
     ) {
-
       return res.status(400).json({
-
         success: false,
-
-        message:
-          "Minimum deposit amount is GH₵100."
-
+        message: "Minimum deposit amount is GH₵100."
       });
-
     }
-
 
     // ========================================
     // VALIDATE PAYMENT METHOD
     // ========================================
 
     if (!paymentMethod || !paymentMethod.trim()) {
-
       return res.status(400).json({
-
         success: false,
-
-        message:
-          "Payment method is required."
-
+        message: "Payment method is required."
       });
-
     }
-
 
     // ========================================
     // MTN ONLY
     // ========================================
 
     if (paymentMethod !== "MTN Mobile Money") {
-
       return res.status(400).json({
-
         success: false,
-
-        message:
-          "Only MTN Mobile Money is currently available."
-
+        message: "Only MTN Mobile Money is currently available."
       });
-
     }
 
+    // ========================================
+    // VALIDATE SENDER NAME
+    // ========================================
+
+    if (!senderName || !senderName.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Sender's full name is required."
+      });
+    }
+
+    // ========================================
+    // VALIDATE SENDER PHONE
+    // ========================================
+
+    if (!senderPhone || !senderPhone.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Sender's phone number is required."
+      });
+    }
 
     // ========================================
     // VALIDATE TRANSACTION ID
     // ========================================
 
-    if (
-      !transactionId ||
-      !transactionId.trim()
-    ) {
-
+    if (!transactionId || !transactionId.trim()) {
       return res.status(400).json({
-
         success: false,
-
-        message:
-          "Transaction ID is required."
-
+        message: "Transaction ID is required."
       });
-
     }
-
 
     // ========================================
     // CREATE DEPOSIT
     // ========================================
 
     const deposit = await Deposit.create({
-
       user: req.user.id,
 
       amount: depositAmount,
 
-      paymentMethod:
-        paymentMethod.trim(),
+      paymentMethod: paymentMethod.trim(),
 
-      transactionId:
-        transactionId.trim(),
+      senderName: senderName.trim(),
+
+      senderPhone: senderPhone.trim(),
+
+      transactionId: transactionId.trim(),
 
       status: "Pending"
-
     });
-
 
     // ========================================
     // RESPONSE
     // ========================================
 
     return res.status(201).json({
-
       success: true,
 
-      message:
-        "Deposit request submitted successfully",
+      message: "Deposit request submitted successfully",
 
       deposit
-
     });
-
 
   } catch (error) {
-
-    console.error(
-      "Create deposit error:",
-      error
-    );
-
+    console.error("Create deposit error:", error);
 
     return res.status(500).json({
-
       success: false,
-
-      message:
-        error.message
-
+      message: error.message
     });
-
   }
-
 });
-
 
 // ==========================================
 // GET LOGGED-IN USER DEPOSITS
 // ==========================================
 
 router.get("/", auth, async (req, res) => {
-
   try {
-
-    const deposits =
-      await Deposit.find({
-        user: req.user.id
-      })
-      .sort({
-        createdAt: -1
-      });
-
+    const deposits = await Deposit.find({
+      user: req.user.id
+    }).sort({
+      createdAt: -1
+    });
 
     return res.json({
-
       success: true,
-
       deposits
-
     });
-
 
   } catch (error) {
-
-    console.error(
-      "Get deposits error:",
-      error
-    );
-
+    console.error("Get deposits error:", error);
 
     return res.status(500).json({
-
       success: false,
-
-      message:
-        error.message
-
+      message: error.message
     });
-
   }
-
 });
-
 
 module.exports = router;
